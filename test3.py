@@ -1,6 +1,6 @@
 import cv2
 from threading import Thread
-from tracker2 import *
+from tracker3 import *
 
 
 def processing(file, file_name):
@@ -39,7 +39,8 @@ def processing(file, file_name):
         # Преобразуем в оттенки серого
         gray = cv2.cvtColor(fg_img, cv2.COLOR_RGB2GRAY)
         # Применяем пороговую фильтрацию
-        _, thresh = cv2.threshold(gray, 40, 255, cv2.THRESH_BINARY)
+        thresh = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 51, 8)
         contours, _ = cv2.findContours(
             thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)  # Находим контуры
 
@@ -63,7 +64,6 @@ def processing(file, file_name):
                         cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
             # Рисуем прямоугольник вокруг обнаруженного объекта
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 3)
-
         # Показ обработанного кадра
         cv2.imshow(file_name, frame)
         if cv2.waitKey(15) & 0xFF == ord('q'):
@@ -72,12 +72,14 @@ def processing(file, file_name):
 
 def first_cam():
     # Запуск обработки первого видеопотока
-    processing('3.Camera 2017-05-29 16-23-04_137 [3m3s].avi', 'First Camera')
+    processing(
+        'D:/тестовое задание/3.Camera 2017-05-29 16-23-04_137 [3m3s].avi', 'First Camera')
 
 
 def second_cam():
     # Запуск обработки второго видеопотока
-    processing('4.Camera 2017-05-29 16-23-04_137 [3m3s].avi', 'Second Camera')
+    processing(
+        'D:/тестовое задание/4.Camera 2017-05-29 16-23-04_137 [3m3s].avi', 'Second Camera')
 
 
 # Создание потоков для обработки видео с двух камер
