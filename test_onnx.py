@@ -1,66 +1,47 @@
-import numpy as np
-import cv2
 import onnxruntime as ort
-from threading import Thread
+from torchvision.io import read_image
+from torchvision.transforms import functional as F
+from torchvision.utils import draw_bounding_boxes
+from PIL import Image
+import torch
 
-# Загрузка ONNX модели
-onnx_model_path = 'ssd_resnet34_dpe400_check_onnx.onnx'
-session = ort.InferenceSession(onnx_model_path)
+# Подгружаем изображение
+img = read_image("C:/Users/meeed/Downloads/40.jpg")
 
-# Функция для предобработки изображения
+# Шаг 1: Подгружаем модель ONNX
+onnx_model_path = "model_simplified.onnx"
 
+# Шаг 2: Инициализация сессии ONNX Runtime
+ort_session = ort.InferenceSession(onnx_model_path)
 
-def preprocess_image(frame):
-    # Изменение размера до 300x300
-    frame = cv2.resize(frame, (300, 300))
-    # Переставляем оси: HWC -> CHW
-    # (height, width, channels) -> (channels, height, width)
-    frame = np.transpose(frame, (2, 0, 1))
-    frame = np.expand_dims(frame, axis=0)  # Добавление размерности батча
-    return frame.astype(np.float32)
-
-
-def processing(file, file_name):
-    # Открываем видеофайл
-    cap = cv2.VideoCapture(file)
-    if not cap.isOpened():
-        print(f"Error: Невозможно открыть видеофайл {file}")
-        return
-
-    while True:
-        # Чтение кадра из видео
-        ret, frame = cap.read()
-        if not ret:
-            print(f"Конец видеопотока {file}")
-            break
-
-        frame_copy = preprocess_image(frame)
-        input_name = session.get_inputs()[0].name
-
-        # Получаем результаты
-        output = session.run(None, {input_name: frame_copy})
-        print(output[0])
-        cv2.imshow(file_name, frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+# Шаг 3: Предобработка изображения для модели
 
 
-def first_cam():
-    # Запуск обработки первого видеопотока
-    processing(
-        'D:/тестовое задание/3.Camera 2017-05-29 16-23-04_137 [3m3s].avi', 'First Camera')
+def preprocess_image(image):
+    # Размеры изображения должны соответствовать входным требованиям модели (1, 3, 300, 300)
+    image = F.resize(image, [300, 300])  # Изменение размера изображения
+    image = F.convert_image_dtype(image, dtype=torch.float32)
+    image = image.unsqueeze(0)  # Добавление батча
+    return image.numpy()  # Возвращаем NumPy массив
 
 
-def second_cam():
-    # Запуск обработки второго видеопотока
-    processing(
-        'D:/тестовое задание/4.Camera 2017-05-29 16-23-04_137 [3m3s].avi', 'Second Camera')
+# Предобработка изображения
+input_data = preprocess_image(img)
 
+# Шаг 4: Выполнение инференса
+ort_inputs = {ort_session.get_inputs()[0].name: input_data}
+ort_outs = ort_session.run(None, ort_inputs)
 
-# Создание потоков для обработки видео с двух камер
-first_thread = Thread(target=first_cam, args=())
-second_thread = Thread(target=second_cam, args=())
+# Шаг 5: Обработка выходных данных модели
+boxes = ort_outs[0]  # Извлекаем предсказанные боксы
 
-# Запуск потоков
-first_thread.start()
-second_thread.start()
+# Нарисуем боксы на изображении
+for box in boxes:
+    x_min, y_min, x_max, y_max, score, class_id = box
+    if score > 0.1:  # Отфильтровываем по порогу вероятности
+        img = draw_bounding_boxes(img, boxes=torch.tensor([[x_min, y_min, x_max, y_max]]),
+                                  labels=[str(int(class_id))], colors="red", width=4)
+
+# Преобразуем обратно в PIL и показываем изображение
+img_pil = Image.fromarray(img.permute(1, 2, 0).byte().numpy())
+img_pil.show()
